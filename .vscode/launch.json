@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Listen for Xdebug",
+            "type": "php",
+            "request": "launch",
+            "port": 9003, // Matches xdebug.client_port in xdebug.ini
+            "pathMappings": {
+                "/var/www/html": "${workspaceFolder}/backend" // Maps container path to local src folder
+            },
+            "hostname": "localhost",
+            "xdebugSettings": {
+                "max_children": 128,
+                "max_depth": 5,
+                "max_data": 1024
+            }
+        }
+    ]
+}

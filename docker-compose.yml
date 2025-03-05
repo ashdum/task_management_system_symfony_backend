@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  php:
+    container_name: symfony_php
+    build:
+      context: ./docker/php
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      - DATABASE_URL=${SYMFONY_DATABASE_URL}
+      - REDIS_URL=${SYMFONY_REDIS_URL}
+      - PHP_IDE_CONFIG=serverName=symfony-app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app_network
+
+  nginx:
+    container_name: symfony_nginx
+    image: nginx:latest
+    ports:
+      - "${NGINX_PORT}:80"
+    volumes:
+      - ./backend:/var/www/html
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    environment:
+      - APP_DOMAIN=${APP_DOMAIN} 
+    depends_on:
+      - php
+    networks:
+      - app_network
+
+  db:
+    container_name: symfony_postgres
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data:rw
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-d", "${DB_NAME}", "-U", "${DB_USER}"]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - app_network
+
+  redis:
+    container_name: symfony_redis
+    image: redis:7
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - redisdata:/data
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
