@@ -23,7 +23,12 @@ services:
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
+    App\Controller\AuthController:
+        tags: ['controller.service_arguments']
+
     predis_client:
         class: Predis\Client
         arguments:
             - { host: '%env(REDIS_HOST)%', port: '%env(REDIS_PORT)%' }
+    Predis\Client:
+        alias: predis_client

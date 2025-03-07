@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface; 
 use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
 use App\Enum\RoleEnum;
@@ -12,17 +13,11 @@ use App\Enum\RoleEnum;
 #[ORM\Table(name: 'users')]
 #[ORM\Index(name: 'idx_user_email', columns: ['email'])]
 #[ApiResource(
-    normalizationContext: ['groups' => ['user:read']],
+    normalizationContext: ['groups' => ['user:read', 'base:read']],
     denormalizationContext: ['groups' => ['user:write']],
 )]
-class User implements UserInterface
+class User extends BaseEntity implements UserInterface, PasswordAuthenticatedUserInterface 
 {
-    #[ORM\Id]
-    #[ORM\GeneratedValue]
-    #[ORM\Column(type: 'integer')]
-    #[Groups(['user:read'])]
-    private ?int $id = null;
-
     #[ORM\Column(type: 'string', length: 180, unique: true)]
     #[Groups(['user:read', 'user:write'])]
     private ?string $email = null;
@@ -51,25 +46,15 @@ class User implements UserInterface
     #[Groups(['user:read'])]
     private ?string $providerId = null;
 
-    #[ORM\Column(type: 'datetime')]
-    #[Groups(['user:read'])]
-    private ?\DateTimeInterface $createdAt = null;
-
-    #[ORM\Column(type: 'datetime')]
-    #[Groups(['user:read'])]
-    private ?\DateTimeInterface $updatedAt = null;
-
     public function __construct()
     {
-        $this->createdAt = new \DateTime();
-        $this->updatedAt = new \DateTime();
+        parent::__construct(); 
     }
 
     // Getters and setters
-    public function getId(): ?int { return $this->id; }
     public function getEmail(): ?string { return $this->email; }
     public function setEmail(string $email): self { $this->email = $email; return $this; }
-    public function getPassword(): ?string { return $this->password; }
+    public function getPassword(): ?string { return $this->password; } 
     public function setPassword(string $password): self { $this->password = $password; return $this; }
     public function getFullName(): ?string { return $this->fullName; }
     public function setFullName(?string $fullName): self { $this->fullName = $fullName; return $this; }
@@ -81,14 +66,11 @@ class User implements UserInterface
     public function setProvider(?string $provider): self { $this->provider = $provider; return $this; }
     public function getProviderId(): ?string { return $this->providerId; }
     public function setProviderId(?string $providerId): self { $this->providerId = $providerId; return $this; }
-    public function getCreatedAt(): ?\DateTimeInterface { return $this->createdAt; }
-    public function getUpdatedAt(): ?\DateTimeInterface { return $this->updatedAt; }
-    public function setUpdatedAt(\DateTimeInterface $updatedAt): self { $this->updatedAt = $updatedAt; return $this; }
 
     // UserInterface methods
     public function getRoles(): array 
     { 
-        return [$this->role->value]; // Возвращаем строку из enum
+        return [$this->role->value];
     }
 
     public function getSalt(): ?string 

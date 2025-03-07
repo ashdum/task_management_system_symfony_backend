@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   php:
     container_name: symfony_php
@@ -27,7 +25,7 @@ services:
       - ./backend:/var/www/html
       - ./docker/nginx/conf.d:/etc/nginx/conf.d
     environment:
-      - APP_DOMAIN=${APP_DOMAIN} 
+      - APP_DOMAIN=${APP_DOMAIN}
     depends_on:
       - php
     networks:
@@ -43,9 +41,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data:rw
     ports:
-      - "${DB_PORT}:${DB_PORT}"
+      - "${DB_EXTERNAL_PORT}:${DB_INTERNAL_PORT}"
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${DB_NAME}", "-U", "${DB_USER}"]
+      test: [ "CMD", "pg_isready", "-d", "${DB_NAME}", "-U", "${DB_USER}" ]
       timeout: 5s
       retries: 5
       start_period: 60s
