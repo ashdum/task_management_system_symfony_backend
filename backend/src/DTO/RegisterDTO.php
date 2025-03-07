@@ -15,6 +15,7 @@ class RegisterDTO
 	#[StrongPassword]
 	public string $password;
 
+	#[Assert\NotBlank(message: 'Имя обязательно')]
 	#[Assert\Length(min: 2, max: 50, minMessage: 'Имя должно быть длиннее 2 символов', maxMessage: 'Имя должно быть короче 50 символов')]
 	public ?string $fullName = null;
 

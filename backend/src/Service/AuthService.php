@@ -12,6 +12,7 @@ use Predis\Client;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailureException;
 use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 class AuthService
 {
@@ -24,13 +25,13 @@ class AuthService
     public function __construct(
         EntityManagerInterface $em,
         JWTTokenManagerInterface $jwtManager,
-        UserPasswordHasherInterface $passwordHasher,
+        UserPasswordHasherInterface $passwordHashes,
         Client $redis,
         JWTEncoderInterface $jwtEncoder
     ) {
         $this->em = $em;
         $this->jwtManager = $jwtManager;
-        $this->passwordHasher = $passwordHasher;
+        $this->passwordHasher = $passwordHashes;
         $this->redis = $redis;
         $this->jwtEncoder = $jwtEncoder;
     }
@@ -39,7 +40,7 @@ class AuthService
     {
         $existingUser = $this->em->getRepository(User::class)->findOneBy(['email' => $dto->email]);
         if ($existingUser) {
-            throw new \Exception('Пользователь с таким email уже существует');
+            throw new BadRequestHttpException('Пользователь с таким email уже существует', null, 409);
         }
 
         $user = new User();
@@ -71,35 +72,42 @@ class AuthService
         return $this->generateTokens($user);
     }
 
-    public function refresh(string $refreshToken): array
-    {
-        try {
-            // Декодируем refresh-токен
-            $payload = $this->jwtEncoder->decode($refreshToken);
-            $userId = $payload['sub'] ?? null;
+	public function refresh(string $refreshToken): array
+	{
+		try {
+			// Декодируем refresh-токен
+			$payload = $this->jwtEncoder->decode($refreshToken);
+			$userId = $payload['sub'] ?? null;
 
-            if (!$userId) {
-                throw new UnauthorizedHttpException('jwt', 'Неверный refresh-токен');
-            }
+			if (!$userId) {
+				throw new UnauthorizedHttpException('jwt', 'Неверный refresh-токен');
+			}
 
-            // Проверяем, существует ли токен в Redis
-            $storedRefreshToken = $this->redis->get("refresh_token:{$userId}");
-            if (!$storedRefreshToken || $storedRefreshToken !== $refreshToken) {
-                throw new UnauthorizedHttpException('jwt', 'Refresh-токен недействителен или истёк');
-            }
+			// Проверяем, существует ли токен в Redis
+			$storedRefreshToken = $this->redis->get("refresh_token:{$userId}");
+			if (!$storedRefreshToken || $storedRefreshToken !== $refreshToken) {
+				throw new UnauthorizedHttpException('jwt', 'Refresh-токен недействителен или истёк');
+			}
 
-            // Находим пользователя
-            $user = $this->em->getRepository(User::class)->find($userId);
-            if (!$user || !$user->isActive()) {
-                throw new UnauthorizedHttpException('jwt', 'Пользователь не найден или удалён');
-            }
+			// Находим пользователя
+			$user = $this->em->getRepository(User::class)->find($userId);
+			if (!$user || !$user->isActive()) {
+				throw new UnauthorizedHttpException('jwt', 'Пользователь не найден или удалён');
+			}
 
-            // Генерируем новые токены
-            return $this->generateTokens($user);
-        } catch (JWTDecodeFailureException $e) {
-            throw new UnauthorizedHttpException('jwt', 'Ошибка валидации refresh-токена: ' . $e->getMessage());
-        }
-    }
+			// Генерируем новые токены
+			return $this->generateTokens($user);
+		} catch (JWTDecodeFailureException $e) {
+			throw new UnauthorizedHttpException('jwt', 'Ошибка валидации refresh-токена: ' . $e->getMessage());
+		}
+	}
+
+	public function logout(User $user): void
+	{
+		// Удаляем токены из Redis
+		$this->redis->del("access_token:{$user->getId()}");
+		$this->redis->del("refresh_token:{$user->getId()}");
+	}
 
     private function generateTokens(User $user): array
     {

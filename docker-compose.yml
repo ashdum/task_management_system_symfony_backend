@@ -9,6 +9,8 @@ services:
     environment:
       - DATABASE_URL=${SYMFONY_DATABASE_URL}
       - REDIS_URL=${SYMFONY_REDIS_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
       - PHP_IDE_CONFIG=serverName=symfony-app
     depends_on:
       - db
