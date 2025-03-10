@@ -6,7 +6,7 @@ security:
     app_user_provider:
       entity:
         class: App\Domain\User\Entity\User
-        property: email
+        property: id
   firewalls:
     dev:
       pattern: ^/(_(profiler|wdt)|css|images|js)/
@@ -15,19 +15,18 @@ security:
       pattern: ^/api/doc
       security: false
     api:
-      pattern: ^/api 
+      pattern: ^/api
       stateless: true
-      jwt: ~ 
+      custom_authenticators:
+        - App\Shared\Security\JwtAuthenticator
     auth:
       pattern: ^/auth
-      stateless: true 
-      jwt: ~
-    main:
-      pattern: ^/
-      lazy: true 
+      stateless: true
+      custom_authenticators:
+        - App\Shared\Security\JwtAuthenticator
   access_control:
-    - { path: ^/auth/(login|register|refresh|google|github)$, roles: PUBLIC_ACCESS } 
-    - { path: ^/auth/(change-password|logout)$, roles: IS_AUTHENTICATED_FULLY } 
+    - { path: ^/auth/(login|register|refresh|google|github)$, roles: PUBLIC_ACCESS }
+    - { path: ^/auth/(change-password|logout)$, roles: IS_AUTHENTICATED_FULLY }
     - { path: ^/api/doc$, roles: PUBLIC_ACCESS }
     - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 

@@ -27,7 +27,7 @@ class AuthService
     private JWTEncoderInterface $jwtEncoder;
     private GoogleClient $googleClient;
     private HttpClientInterface $httpClient;
-    private string $googleClientId; // Оставляем только для проверки audience
+    private string $googleClientId;
     private string $githubClientId;
     private string $githubClientSecret;
 
@@ -115,15 +115,9 @@ class AuthService
     public function googleLogin(string $credential): array
     {
         try {
-            // Указываем токен и audience явно
             $payload = $this->googleClient->verifyIdToken($credential, $this->googleClientId);
-
-            if ($payload === false) {
+            if ($payload === false || !isset($payload['email'])) {
                 throw new UnauthorizedHttpException('google', 'Неверный Google токен');
-            }
-
-            if (!isset($payload['email'])) {
-                throw new UnauthorizedHttpException('google', 'Неверный Google токен: email отсутствует');
             }
 
             return $this->loginWithOAuth([
@@ -133,11 +127,7 @@ class AuthService
                 'provider' => 'google',
                 'avatar' => $payload['picture'] ?? '',
             ]);
-        } catch (UnexpectedValueException $e) {
-            throw new UnauthorizedHttpException('google', 'Неверный формат Google токена: ' . $e->getMessage());
-        } catch (LogicException $e) {
-            throw new UnauthorizedHttpException('google', 'Ошибка конфигурации Google клиента: ' . $e->getMessage());
-        } catch (Exception $e) {
+        } catch (UnexpectedValueException | LogicException | Exception $e) {
             throw new UnauthorizedHttpException('google', 'Ошибка обработки Google токена: ' . $e->getMessage());
         }
     }
@@ -151,9 +141,7 @@ class AuthService
                     'client_secret' => $this->githubClientSecret,
                     'code' => $code,
                 ],
-                'headers' => [
-                    'Accept' => 'application/json',
-                ],
+                'headers' => ['Accept' => 'application/json'],
             ]);
 
             $tokenData = $tokenResponse->toArray();
@@ -162,9 +150,7 @@ class AuthService
             }
 
             $userResponse = $this->httpClient->request('GET', 'https://api.github.com/user', [
-                'headers' => [
-                    'Authorization' => "token {$tokenData['access_token']}",
-                ],
+                'headers' => ['Authorization' => "token {$tokenData['access_token']}"],
             ]);
 
             $userData = $userResponse->toArray();
@@ -195,7 +181,6 @@ class AuthService
                 $oauthUser['avatar']
             );
         } else {
-            // Проверяем, соответствует ли провайдер
             if ($user->getProvider() && $user->getProvider() !== $oauthUser['provider']) {
                 throw new BadRequestHttpException(
                     "Этот email уже привязан к другому провайдеру ({$user->getProvider()})"
@@ -220,13 +205,18 @@ class AuthService
     {
         try {
             $payload = $this->jwtEncoder->decode($jwtToken);
-            $email = $payload['sub'] ?? null; // Теперь sub — это email
+            $userId = $payload['sub'] ?? null;
 
-            if (!$email) {
+            if (!$userId) {
                 throw new UnauthorizedHttpException('jwt', 'Неверный или повреждённый токен');
             }
 
-            $user = $this->usersService->getUserByEmail($email); // Используем email вместо ID
+            $storedAccessToken = $this->redisService->getToken("access_token:{$userId}");
+            if (!$storedAccessToken || $storedAccessToken !== $jwtToken) {
+                throw new UnauthorizedHttpException('jwt', 'Токен недействителен или был отозван');
+            }
+
+            $user = $this->usersService->getUser($userId);
             if (!$user || !$user->isActive()) {
                 throw new UnauthorizedHttpException('jwt', 'Пользователь не найден или удалён');
             }
@@ -239,16 +229,16 @@ class AuthService
 
     private function generateTokens(User $user): array
     {
-        $accessToken = $this->jwtManager->create($user);
+        $accessToken = $this->jwtManager->create($user); // 'sub' будет содержать $user->getId()
         $refreshPayload = [
-            'sub' => $user->getEmail(), // Используем email вместо ID
-            'email' => $user->getEmail(),
-            'exp' => time() + 604800,
+            'sub' => $user->getId(), // Используем ID как sub
+            'email' => $user->getEmail(), // Дополнительно для удобства
+            'exp' => time() + 86400, // 24 часа для refresh token
         ];
         $refreshToken = $this->jwtEncoder->encode($refreshPayload);
 
-        $this->redisService->setToken("access_token:{$user->getId()}", $accessToken, 3600);
-        $this->redisService->setToken("refresh_token:{$user->getId()}", $refreshToken, 604800);
+        $this->redisService->setToken("access_token:{$user->getId()}", $accessToken, 3600); // 1 час для access token
+        $this->redisService->setToken("refresh_token:{$user->getId()}", $refreshToken, 86400);
 
         return [
             'accessToken' => $accessToken,

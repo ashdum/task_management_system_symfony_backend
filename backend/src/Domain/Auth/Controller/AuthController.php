@@ -241,36 +241,9 @@ class AuthController
             content: new OA\JsonContent(ref: new Model(type: ChangePasswordDTO::class))
         ),
         responses: [
-            new OA\Response(
-                response: 200,
-                description: "Password changed successfully",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "message", type: "string", example: "Пароль успешно изменен")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 400,
-                description: "Invalid current password or validation error",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Текущий пароль неверный")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 401,
-                description: "User not authenticated",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Пользователь не авторизован")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 200, description: "Password changed successfully", content: new OA\JsonContent(properties: [new OA\Property(property: "message", type: "string", example: "Пароль успешно изменен")])),
+            new OA\Response(response: 400, description: "Invalid current password or validation error", content: new OA\JsonContent(properties: [new OA\Property(property: "error", type: "string", example: "Текущий пароль неверный")])),
+            new OA\Response(response: 401, description: "User not authenticated", content: new OA\JsonContent(properties: [new OA\Property(property: "error", type: "string", example: "Пользователь не авторизован")]))
         ]
     )]
     public function changePassword(Request $request): JsonResponse
@@ -280,6 +253,7 @@ class AuthController
             if (!$user) {
                 throw new HttpException(401, 'Пользователь не авторизован');
             }
+
             $dto = $this->serializer->deserialize($request->getContent(), ChangePasswordDTO::class, 'json');
             $errors = $this->validator->validate($dto);
             if (count($errors) > 0) {
@@ -428,26 +402,8 @@ class AuthController
         tags: ["Authentication"],
         security: [["JWT-auth" => []]],
         responses: [
-            new OA\Response(
-                response: 200,
-                description: "User logged out successfully",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "message", type: "string", example: "Успешно вышли из системы")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 401,
-                description: "User not authenticated",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Пользователь не авторизован")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 200, description: "User logged out successfully", content: new OA\JsonContent(properties: [new OA\Property(property: "message", type: "string", example: "Успешно вышли из системы")])),
+            new OA\Response(response: 401, description: "User not authenticated", content: new OA\JsonContent(properties: [new OA\Property(property: "error", type: "string", example: "Пользователь не авторизован")]))
         ]
     )]
     public function logout(): JsonResponse
