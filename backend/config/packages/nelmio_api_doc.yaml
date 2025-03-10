@@ -1,0 +1,24 @@
+nelmio_api_doc:
+    documentation:
+        info:
+            title: Task Management System API
+            description: API documentation for the task management system
+            version: 1.0.0
+        servers:
+            - url: http://localhost
+              description: Local server
+        components:
+            securitySchemes:
+                JWT-auth:  # Имя должно совпадать с тем, что используется в security
+                    type: http
+                    scheme: bearer
+                    bearerFormat: JWT
+                    description: Enter JWT token
+                    name: Authorization
+                    in: header  
+        # security:
+        #     - Bearer: [ ]
+    areas:
+        path_patterns:
+            - ^/auth
+            - ^/api/doc

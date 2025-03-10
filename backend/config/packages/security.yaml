@@ -1,24 +1,35 @@
-# config/packages/security.yaml
 security:
   password_hashers:
-    App\Entity\User:
+    App\Domain\User\Entity\User:
       algorithm: auto
   providers:
     app_user_provider:
       entity:
-        class: App\Entity\User
+        class: App\Domain\User\Entity\User
         property: email
   firewalls:
     dev:
       pattern: ^/(_(profiler|wdt)|css|images|js)/
       security: false
+    api_doc:
+      pattern: ^/api/doc
+      security: false
     api:
-      pattern: ^/auth 
+      pattern: ^/api 
       stateless: true
       jwt: ~ 
+    auth:
+      pattern: ^/auth
+      stateless: true 
+      jwt: ~
+    main:
+      pattern: ^/
+      lazy: true 
   access_control:
-    - { path: ^/auth/(login|register|refresh)$, roles: PUBLIC_ACCESS } 
-    - { path: ^/auth/logout$, roles: IS_AUTHENTICATED_FULLY } 
+    - { path: ^/auth/(login|register|refresh|google|github)$, roles: PUBLIC_ACCESS } 
+    - { path: ^/auth/(change-password|logout)$, roles: IS_AUTHENTICATED_FULLY } 
+    - { path: ^/api/doc$, roles: PUBLIC_ACCESS }
+    - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
   security:

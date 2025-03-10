@@ -4,6 +4,11 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    REDIS_DSN: '%env(REDIS_DSN)%'
+    GOOGLE_CLIENT_ID: '%env(GOOGLE_CLIENT_ID)%'
+    GOOGLE_CLIENT_SECRET: '%env(GOOGLE_CLIENT_SECRET)%'
+    GITHUB_CLIENT_ID: '%env(GITHUB_CLIENT_ID)%'
+    GITHUB_CLIENT_SECRET: '%env(GITHUB_CLIENT_SECRET)%'
 
 services:
     # default configuration for services in *this* file
@@ -17,18 +22,25 @@ services:
         resource: '../src/'
         exclude:
             - '../src/DependencyInjection/'
-            - '../src/Entity/'
             - '../src/Kernel.php'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
-    App\Controller\AuthController:
+    App\Shared\Service\RedisService:
+        arguments:
+            $redisDsn: '%env(REDIS_DSN)%'
+
+    App\Domain\Auth\Controller\AuthController:
         tags: ['controller.service_arguments']
 
-    predis_client:
-        class: Predis\Client
+    Google\Client:
+        calls:
+            - [setClientId, ['%env(GOOGLE_CLIENT_ID)%']]
+            - [setClientSecret, ['%env(GOOGLE_CLIENT_SECRET)%']]
+
+    App\Domain\Auth\Service\AuthService:
         arguments:
-            - { host: '%env(REDIS_HOST)%', port: '%env(REDIS_PORT)%' }
-    Predis\Client:
-        alias: predis_client
+            $googleClientId: '%env(GOOGLE_CLIENT_ID)%'
+            $githubClientId: '%env(GITHUB_CLIENT_ID)%'
+            $githubClientSecret: '%env(GITHUB_CLIENT_SECRET)%'

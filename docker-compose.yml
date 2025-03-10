@@ -7,11 +7,13 @@ services:
     volumes:
       - ./backend:/var/www/html
     environment:
-      - DATABASE_URL=${SYMFONY_DATABASE_URL}
-      - REDIS_URL=${SYMFONY_REDIS_URL}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
+      - SYMFONY_DATABASE_URL=${SYMFONY_DATABASE_URL}
+      - SYMFONY_REDIS_URL=${SYMFONY_REDIS_URL}
       - PHP_IDE_CONFIG=serverName=symfony-app
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
     depends_on:
       - db
       - redis
@@ -35,7 +37,7 @@ services:
 
   db:
     container_name: symfony_postgres
-    image: postgres:15
+    image: postgres:${POSTGRES_VERSION}
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -45,7 +47,7 @@ services:
     ports:
       - "${DB_EXTERNAL_PORT}:${DB_INTERNAL_PORT}"
     healthcheck:
-      test: [ "CMD", "pg_isready", "-d", "${DB_NAME}", "-U", "${DB_USER}" ]
+      test: ["CMD", "pg_isready", "-d", "${DB_NAME}", "-U", "${DB_USER}"]
       timeout: 5s
       retries: 5
       start_period: 60s

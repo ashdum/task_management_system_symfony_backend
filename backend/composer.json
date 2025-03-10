@@ -7,14 +7,17 @@
         "php": ">=8.2",
         "ext-ctype": "*",
         "ext-iconv": "*",
-        "api-platform/core": ">=4.1",
         "api-platform/doctrine-orm": "^4.1",
         "api-platform/symfony": "^4.1",
         "doctrine/dbal": "^3.9.4",
         "doctrine/doctrine-bundle": "^2.13.2",
         "doctrine/doctrine-migrations-bundle": "^3.4.1",
         "doctrine/orm": ">=3.3.2",
+        "google/apiclient": "^2.18",
+        "google/auth": "*",
+        "hwi/oauth-bundle": "*",
         "lexik/jwt-authentication-bundle": ">=3.1.1",
+        "nelmio/api-doc-bundle": "^5.0",
         "nelmio/cors-bundle": "^2.5",
         "phpdocumentor/reflection-docblock": "^5.6.1",
         "phpstan/phpdoc-parser": "^2.1",
@@ -26,6 +29,7 @@
         "symfony/expression-language": "7.2.*",
         "symfony/flex": "^2.5",
         "symfony/framework-bundle": "7.2.*",
+        "symfony/http-client": "7.2.*",
         "symfony/messenger": "7.2.*",
         "symfony/property-access": "7.2.*",
         "symfony/property-info": "7.2.*",
@@ -88,6 +92,10 @@
         }
     },
     "require-dev": {
-        "symfony/maker-bundle": "^1.62.1"
+        "phpunit/phpunit": "^11.5",
+        "symfony/browser-kit": "7.2.*",
+        "symfony/css-selector": "7.2.*",
+        "symfony/maker-bundle": "^1.62.1",
+        "symfony/phpunit-bridge": "^7.2"
     }
 }
