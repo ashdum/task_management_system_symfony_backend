@@ -12,11 +12,17 @@ use OpenApi\Attributes as OA;
 class RefreshTokenDTO
 {
     #[Assert\NotBlank(message: 'Refresh-токен обязателен')]
-    #[OA\Property(
-        property: "refreshToken",
-        type: "string",
-        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-        description: "Refresh token for generating new access token"
-    )]
-    public string $refreshToken;
+    #[OA\Property(property: "refreshToken", type: "string", example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", description: "Refresh token for generating new access token")]
+    private string $refreshToken;
+
+    public function getRefreshToken(): string
+    {
+        return $this->refreshToken;
+    }
+
+    public function setRefreshToken(string $refreshToken): self
+    {
+        $this->refreshToken = $refreshToken;
+        return $this;
+    }
 }

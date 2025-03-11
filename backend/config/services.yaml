@@ -4,36 +4,74 @@ parameters:
     GOOGLE_CLIENT_SECRET: '%env(GOOGLE_CLIENT_SECRET)%'
     GITHUB_CLIENT_ID: '%env(GITHUB_CLIENT_ID)%'
     GITHUB_CLIENT_SECRET: '%env(GITHUB_CLIENT_SECRET)%'
+    token_refresh_ttl: 86400
 
 services:
+    # Настройки по умолчанию для всех сервисов
     _defaults:
         autowire: true
         autoconfigure: true
 
+    # Автоматическая регистрация всех классов в src/, кроме исключений
     App\:
         resource: '../src/'
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Kernel.php'
 
+    # RedisService
     App\Shared\Service\RedisService:
         arguments:
-            $redisDsn: '%env(REDIS_DSN)%'
+            $redisDsn: '%REDIS_DSN%'
 
+    # Google Client
+    Google\Client:
+        calls:
+            - [setClientId, ['%GOOGLE_CLIENT_ID%']]
+            - [setClientSecret, ['%GOOGLE_CLIENT_SECRET%']]
+
+    # UserRepository
+    App\Domain\User\Repository\UserRepository:
+        arguments:
+            $registry: '@doctrine'
+
+    # UsersService
+    App\Domain\User\Service\UsersService:
+        arguments:
+            $userRepository: '@App\Domain\User\Repository\UserRepository'
+            $passwordHasher: '@security.user_password_hasher'
+
+    # TokenService
+    App\Domain\Auth\Service\TokenService:  
+        arguments:
+            $jwtManager: '@lexik_jwt_authentication.jwt_manager'
+            $jwtEncoder: '@lexik_jwt_authentication.encoder.lcobucci'
+            $redisService: '@App\Shared\Service\RedisService'
+            $usersService: '@App\Domain\User\Service\UsersService'
+            $refreshTtl: '%token_refresh_ttl%'
+
+    # OAuthService
+    App\Domain\Auth\Service\OAuthService:
+        arguments:
+            $googleClient: '@Google\Client'
+            $httpClient: '@http_client'
+            $usersService: '@App\Domain\User\Service\UsersService'
+            $googleClientId: '%GOOGLE_CLIENT_ID%'
+            $githubClientId: '%GITHUB_CLIENT_ID%'
+            $githubClientSecret: '%GITHUB_CLIENT_SECRET%'
+
+    # AuthService
+    App\Domain\Auth\Service\AuthService:
+        arguments:
+            $passwordHasher: '@security.user_password_hasher'
+            $tokenService: '@App\Domain\Auth\Service\TokenService'
+            $usersService: '@App\Domain\User\Service\UsersService'
+            $oauthService: '@App\Domain\Auth\Service\OAuthService' 
+
+    # AuthController
     App\Domain\Auth\Controller\AuthController:
         tags: ['controller.service_arguments']
 
-    Google\Client:
-        calls:
-            - [setClientId, ['%env(GOOGLE_CLIENT_ID)%']]
-            - [setClientSecret, ['%env(GOOGLE_CLIENT_SECRET)%']]
-
-    App\Domain\Auth\Service\AuthService:
-        arguments:
-            $googleClientId: '%env(GOOGLE_CLIENT_ID)%'
-            $githubClientId: '%env(GITHUB_CLIENT_ID)%'
-            $githubClientSecret: '%env(GITHUB_CLIENT_SECRET)%'
-
-    App\Shared\Security\JwtAuthenticator:
-        arguments:
-            $authService: '@App\Domain\Auth\Service\AuthService'
+    App\Shared\EventListener\ExceptionListener:
+        tags:
+            - { name: kernel.event_listener, event: kernel.exception }

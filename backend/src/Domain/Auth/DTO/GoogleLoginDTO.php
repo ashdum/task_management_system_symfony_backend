@@ -12,11 +12,17 @@ use OpenApi\Attributes as OA;
 class GoogleLoginDTO
 {
     #[Assert\NotBlank(message: "Google credential обязателен")]
-    #[OA\Property(
-        property: "credential",
-        type: "string",
-        example: "google-id-token",
-        description: "Google OAuth credential"
-    )]
-    public string $credential;
+    #[OA\Property(property: "credential", type: "string", example: "google-id-token", description: "Google OAuth credential")]
+    private string $credential;
+
+    public function getCredential(): string
+    {
+        return $this->credential;
+    }
+
+    public function setCredential(string $credential): self
+    {
+        $this->credential = $credential;
+        return $this;
+    }
 }

@@ -38,7 +38,7 @@ abstract class BaseEntity
         example: 1,
         description: "Deletion status (1 = ACTIVE, 2 = DELETED)"
     )]
-    protected ?DelStatusEnum $delStatus = null; // No initialization here
+    protected ?DelStatusEnum $delStatus;
 
     #[ORM\Column(type: 'datetime', nullable: true)]
     #[Groups(['base:read'])]

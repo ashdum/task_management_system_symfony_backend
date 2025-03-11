@@ -1,43 +1,39 @@
 <?php
-
 namespace App\Domain\Auth\Controller;
 
-use App\Domain\Auth\DTO\LoginDTO;
-use App\Domain\Auth\DTO\RegisterDTO;
-use App\Domain\Auth\DTO\RefreshTokenDTO;
 use App\Domain\Auth\DTO\ChangePasswordDTO;
-use App\Domain\Auth\DTO\GoogleLoginDTO;
 use App\Domain\Auth\DTO\GithubLoginDTO;
+use App\Domain\Auth\DTO\GoogleLoginDTO;
+use App\Domain\Auth\DTO\LoginDTO;
+use App\Domain\Auth\DTO\RefreshTokenDTO;
+use App\Domain\Auth\DTO\RegisterDTO;
 use App\Domain\Auth\Service\AuthService;
 use App\Domain\User\Entity\User;
-use Exception;
+use App\Shared\Controller\BaseController;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Validator\Validator\ValidatorInterface;
-use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use OpenApi\Attributes as OA;
 
-class AuthController
+class AuthController extends BaseController
 {
     private AuthService $authService;
-    private ValidatorInterface $validator;
-    private SerializerInterface $serializer;
     private Security $security;
 
     public function __construct(
         AuthService $authService,
-        ValidatorInterface $validator,
+        Security $security,
         SerializerInterface $serializer,
-        Security $security
+        ValidatorInterface $validator
     ) {
+        parent::__construct($serializer, $validator);
         $this->authService = $authService;
-        $this->validator = $validator;
-        $this->serializer = $serializer;
         $this->security = $security;
     }
 
@@ -63,45 +59,15 @@ class AuthController
                     type: "object"
                 )
             ),
-            new OA\Response(
-                response: 400,
-                description: "Validation error",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "errors", type: "string", example: "The email field is required.")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 409,
-                description: "User with this email already exists",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Пользователь с таким email уже существует")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 400, description: "Validation error"),
+            new OA\Response(response: 409, description: "User with this email already exists")
         ]
     )]
     public function register(Request $request): JsonResponse
     {
-        try {
-            $dto = $this->serializer->deserialize($request->getContent(), RegisterDTO::class, 'json');
-            $errors = $this->validator->validate($dto);
-
-            if (count($errors) > 0) {
-                return new JsonResponse(['errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $result = $this->authService->register($dto);
-            return new JsonResponse($result, Response::HTTP_CREATED);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        $dto = $this->deserializeAndValidate($request, RegisterDTO::class);
+        $result = $this->authService->register($dto);
+        return $this->jsonResponse($result, Response::HTTP_CREATED);
     }
 
     #[Route('/auth/login', name: 'auth_login', methods: ['POST'])]
@@ -126,45 +92,15 @@ class AuthController
                     type: "object"
                 )
             ),
-            new OA\Response(
-                response: 400,
-                description: "Validation error",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "errors", type: "string", example: "The password field is required.")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 401,
-                description: "Invalid credentials",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Неверные учетные данные")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 400, description: "Validation error"),
+            new OA\Response(response: 401, description: "Invalid credentials")
         ]
     )]
     public function login(Request $request): JsonResponse
     {
-        try {
-            $dto = $this->serializer->deserialize($request->getContent(), LoginDTO::class, 'json');
-            $errors = $this->validator->validate($dto);
-
-            if (count($errors) > 0) {
-                return new JsonResponse(['errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $result = $this->authService->login($dto);
-            return new JsonResponse($result, Response::HTTP_OK);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        $dto = $this->deserializeAndValidate($request, LoginDTO::class);
+        $result = $this->authService->login($dto);
+        return $this->jsonResponse($result);
     }
 
     #[Route('/auth/refresh', name: 'auth_refresh', methods: ['POST'])]
@@ -189,45 +125,15 @@ class AuthController
                     type: "object"
                 )
             ),
-            new OA\Response(
-                response: 400,
-                description: "Validation error",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "errors", type: "string", example: "The refreshToken field is required.")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 401,
-                description: "Invalid or expired refresh token",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Ошибка валидации refresh-токена")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 400, description: "Validation error"),
+            new OA\Response(response: 401, description: "Invalid or expired refresh token")
         ]
     )]
     public function refresh(Request $request): JsonResponse
     {
-        try {
-            $dto = $this->serializer->deserialize($request->getContent(), RefreshTokenDTO::class, 'json');
-            $errors = $this->validator->validate($dto);
-
-            if (count($errors) > 0) {
-                return new JsonResponse(['errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $result = $this->authService->refresh($dto->refreshToken);
-            return new JsonResponse($result, Response::HTTP_OK);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        $dto = $this->deserializeAndValidate($request, RefreshTokenDTO::class);
+        $result = $this->authService->refresh($dto->getRefreshToken());
+        return $this->jsonResponse($result);
     }
 
     #[Route('/auth/change-password', name: 'auth_change_password', methods: ['POST'])]
@@ -241,32 +147,21 @@ class AuthController
             content: new OA\JsonContent(ref: new Model(type: ChangePasswordDTO::class))
         ),
         responses: [
-            new OA\Response(response: 200, description: "Password changed successfully", content: new OA\JsonContent(properties: [new OA\Property(property: "message", type: "string", example: "Пароль успешно изменен")])),
-            new OA\Response(response: 400, description: "Invalid current password or validation error", content: new OA\JsonContent(properties: [new OA\Property(property: "error", type: "string", example: "Текущий пароль неверный")])),
-            new OA\Response(response: 401, description: "User not authenticated", content: new OA\JsonContent(properties: [new OA\Property(property: "error", type: "string", example: "Пользователь не авторизован")]))
+            new OA\Response(response: 200, description: "Password changed successfully"),
+            new OA\Response(response: 400, description: "Invalid current password or validation error"),
+            new OA\Response(response: 401, description: "User not authenticated")
         ]
     )]
     public function changePassword(Request $request): JsonResponse
     {
-        try {
-            $user = $this->security->getUser();
-            if (!$user) {
-                throw new HttpException(401, 'Пользователь не авторизован');
-            }
-
-            $dto = $this->serializer->deserialize($request->getContent(), ChangePasswordDTO::class, 'json');
-            $errors = $this->validator->validate($dto);
-            if (count($errors) > 0) {
-                return new JsonResponse(['errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $this->authService->changePassword($user, $dto->currentPassword, $dto->newPassword);
-            return new JsonResponse(['message' => 'Пароль успешно изменен'], Response::HTTP_OK);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        $user = $this->security->getUser();
+        if (!$user) {
+            throw new HttpException(401, 'Пользователь не авторизован');
         }
+
+        $dto = $this->deserializeAndValidate($request, ChangePasswordDTO::class);
+        $this->authService->changePassword($user, $dto->getCurrentPassword(), $dto->getNewPassword());
+        return $this->jsonResponse(['message' => 'Пароль успешно изменен']);
     }
 
     #[Route('/auth/google', name: 'auth_google', methods: ['POST'])]
@@ -291,45 +186,15 @@ class AuthController
                     type: "object"
                 )
             ),
-            new OA\Response(
-                response: 400,
-                description: "Validation error",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "errors", type: "string", example: "The credential field is required.")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 401,
-                description: "Invalid Google token",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Неверный Google токен")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 400, description: "Validation error"),
+            new OA\Response(response: 401, description: "Invalid Google token")
         ]
     )]
     public function googleLogin(Request $request): JsonResponse
     {
-        try {
-            $dto = $this->serializer->deserialize($request->getContent(), GoogleLoginDTO::class, 'json');
-            $errors = $this->validator->validate($dto);
-
-            if (count($errors) > 0) {
-                return new JsonResponse(['errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $result = $this->authService->googleLogin($dto->credential);
-            return new JsonResponse($result, Response::HTTP_OK);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        $dto = $this->deserializeAndValidate($request, GoogleLoginDTO::class);
+        $result = $this->authService->googleLogin($dto->getCredential());
+        return $this->jsonResponse($result);
     }
 
     #[Route('/auth/github', name: 'auth_github', methods: ['POST'])]
@@ -354,45 +219,15 @@ class AuthController
                     type: "object"
                 )
             ),
-            new OA\Response(
-                response: 400,
-                description: "Validation error",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "errors", type: "string", example: "The code field is required.")
-                    ],
-                    type: "object"
-                )
-            ),
-            new OA\Response(
-                response: 401,
-                description: "Invalid GitHub code",
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: "error", type: "string", example: "Ошибка обработки GitHub токена")
-                    ],
-                    type: "object"
-                )
-            )
+            new OA\Response(response: 400, description: "Validation error"),
+            new OA\Response(response: 401, description: "Invalid GitHub code")
         ]
     )]
     public function githubLogin(Request $request): JsonResponse
     {
-        try {
-            $dto = $this->serializer->deserialize($request->getContent(), GithubLoginDTO::class, 'json');
-            $errors = $this->validator->validate($dto);
-
-            if (count($errors) > 0) {
-                return new JsonResponse(['errors' => (string) $errors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $result = $this->authService->githubLogin($dto->code);
-            return new JsonResponse($result, Response::HTTP_OK);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        $dto = $this->deserializeAndValidate($request, GithubLoginDTO::class);
+        $result = $this->authService->githubLogin($dto->getCode());
+        return $this->jsonResponse($result);
     }
 
     #[Route('/auth/logout', name: 'auth_logout', methods: ['POST'])]
@@ -402,24 +237,18 @@ class AuthController
         tags: ["Authentication"],
         security: [["JWT-auth" => []]],
         responses: [
-            new OA\Response(response: 200, description: "User logged out successfully", content: new OA\JsonContent(properties: [new OA\Property(property: "message", type: "string", example: "Успешно вышли из системы")])),
-            new OA\Response(response: 401, description: "User not authenticated", content: new OA\JsonContent(properties: [new OA\Property(property: "error", type: "string", example: "Пользователь не авторизован")]))
+            new OA\Response(response: 200, description: "User logged out successfully"),
+            new OA\Response(response: 401, description: "User not authenticated")
         ]
     )]
     public function logout(): JsonResponse
     {
-        try {
-            $user = $this->security->getUser();
-            if (!$user) {
-                throw new HttpException(401, 'Пользователь не авторизован');
-            }
-
-            $this->authService->logout($user);
-            return new JsonResponse(['message' => 'Успешно вышли из системы'], Response::HTTP_OK);
-        } catch (HttpException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], $e->getStatusCode());
-        } catch (Exception $e) {
-            return new JsonResponse(['error' => 'Внутренняя ошибка сервера'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        $user = $this->security->getUser();
+        if (!$user) {
+            throw new HttpException(401, 'Пользователь не авторизован');
         }
+
+        $this->authService->logout($user);
+        return $this->jsonResponse(['message' => 'Успешно вышли из системы']);
     }
 }

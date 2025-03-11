@@ -5,54 +5,37 @@ namespace App\Tests\Domain\Auth\Service;
 use App\Domain\Auth\DTO\LoginDTO;
 use App\Domain\Auth\DTO\RegisterDTO;
 use App\Domain\Auth\Service\AuthService;
+use App\Domain\Auth\Service\OAuthService;
+use App\Domain\Auth\Service\TokenService;
 use App\Domain\User\Entity\User;
 use App\Shared\Enum\DelStatusEnum;
 use App\Shared\Enum\RoleEnum;
-use App\Shared\Service\RedisService;
-use Lexik\Bundle\JWTAuthenticationBundle\Encoder\JWTEncoderInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Exception\JWTDecodeFailureException;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Google\Client as GoogleClient;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 use App\Domain\User\Service\UsersService;
 
 class AuthServiceTest extends TestCase
 {
     private $usersService;
-    private $jwtManager;
     private $passwordHasher;
-    private $redisService;
-    private $jwtEncoder;
-    private $googleClient;
-    private $httpClient;
+    private $tokenService;
+    private $oauthService;
     private $authService;
 
     protected function setUp(): void
     {
         $this->usersService = $this->createMock(UsersService::class);
-        $this->jwtManager = $this->createMock(JWTTokenManagerInterface::class);
         $this->passwordHasher = $this->createMock(UserPasswordHasherInterface::class);
-        $this->redisService = $this->createMock(RedisService::class);
-        $this->jwtEncoder = $this->createMock(JWTEncoderInterface::class);
-        $this->googleClient = $this->createMock(GoogleClient::class);
-        $this->httpClient = $this->createMock(HttpClientInterface::class);
+        $this->tokenService = $this->createMock(TokenService::class);
+        $this->oauthService = $this->createMock(OAuthService::class);
 
         $this->authService = new AuthService(
             $this->usersService,
-            $this->jwtManager,
             $this->passwordHasher,
-            $this->redisService,
-            $this->jwtEncoder,
-            $this->googleClient,
-            $this->httpClient,
-            'google-client-id',
-            'github-client-id',
-            'github-client-secret'
+            $this->tokenService,
+            $this->oauthService
         );
     }
 
@@ -72,36 +55,30 @@ class AuthServiceTest extends TestCase
     public function testRegisterSuccess(): void
     {
         $dto = new RegisterDTO();
-        $dto->email = 'test@example.com';
-        $dto->password = 'StrongPass123!';
-        $dto->fullName = 'Test User';
+        $dto->setEmail('test@example.com');
+        $dto->setPassword('StrongPass123!');
+        $dto->setFullName('Test User');
 
         $user = $this->createUser();
 
         $this->usersService->expects($this->once())
             ->method('getUserByEmail')
-            ->with($dto->email)
+            ->with($dto->getEmail())
             ->willReturn(null);
 
         $this->usersService->expects($this->once())
             ->method('createUser')
-            ->with($dto->email, $dto->password, $dto->fullName, null)
+            ->with($dto->getEmail(), $dto->getPassword(), $dto->getFullName(), null)
             ->willReturn($user);
 
-        $this->jwtManager->expects($this->once())
-            ->method('create')
+        $this->tokenService->expects($this->once())
+            ->method('generateTokens')
             ->with($user)
-            ->willReturn('access_token');
-
-        $this->jwtEncoder->expects($this->once())
-            ->method('encode')
-            ->with($this->callback(function ($payload) {
-                return isset($payload['sub']) && isset($payload['email']) && isset($payload['exp']);
-            }))
-            ->willReturn('refresh_token');
-
-        $this->redisService->expects($this->exactly(2))
-            ->method('setToken');
+            ->willReturn([
+                'accessToken' => 'access_token',
+                'refreshToken' => 'refresh_token',
+                'user' => ['email' => 'test@example.com']
+            ]);
 
         $result = $this->authService->register($dto);
 
@@ -113,11 +90,11 @@ class AuthServiceTest extends TestCase
     public function testRegisterUserExists(): void
     {
         $dto = new RegisterDTO();
-        $dto->email = 'test@example.com';
+        $dto->setEmail('test@example.com');
 
         $this->usersService->expects($this->once())
             ->method('getUserByEmail')
-            ->with($dto->email)
+            ->with($dto->getEmail())
             ->willReturn($this->createUser());
 
         $this->expectException(BadRequestHttpException::class);
@@ -129,31 +106,25 @@ class AuthServiceTest extends TestCase
     public function testLoginSuccess(): void
     {
         $dto = new LoginDTO();
-        $dto->email = 'test@example.com';
-        $dto->password = 'StrongPass123!';
+        $dto->setEmail('test@example.com');
+        $dto->setPassword('StrongPass123!');
 
         $user = $this->createUser();
 
         $this->usersService->expects($this->once())
             ->method('getUserByEmail')
-            ->with($dto->email)
+            ->with($dto->getEmail())
             ->willReturn($user);
 
         $this->passwordHasher->expects($this->once())
             ->method('isPasswordValid')
-            ->with($user, $dto->password)
+            ->with($user, $dto->getPassword())
             ->willReturn(true);
 
-        $this->jwtManager->expects($this->once())
-            ->method('create')
-            ->willReturn('access_token');
-
-        $this->jwtEncoder->expects($this->once())
-            ->method('encode')
-            ->willReturn('refresh_token');
-
-        $this->redisService->expects($this->exactly(2))
-            ->method('setToken');
+        $this->tokenService->expects($this->once())
+            ->method('generateTokens')
+            ->with($user)
+            ->willReturn(['accessToken' => 'access_token', 'refreshToken' => 'refresh_token']);
 
         $result = $this->authService->login($dto);
 
@@ -164,19 +135,19 @@ class AuthServiceTest extends TestCase
     public function testLoginInvalidCredentials(): void
     {
         $dto = new LoginDTO();
-        $dto->email = 'test@example.com';
-        $dto->password = 'WrongPass';
+        $dto->setEmail('test@example.com');
+        $dto->setPassword('WrongPass');
 
         $user = $this->createUser();
 
         $this->usersService->expects($this->once())
             ->method('getUserByEmail')
-            ->with($dto->email)
+            ->with($dto->getEmail())
             ->willReturn($user);
 
         $this->passwordHasher->expects($this->once())
             ->method('isPasswordValid')
-            ->with($user, $dto->password)
+            ->with($user, $dto->getPassword())
             ->willReturn(false);
 
         $this->expectException(UnauthorizedHttpException::class);
@@ -188,34 +159,16 @@ class AuthServiceTest extends TestCase
     public function testRefreshSuccess(): void
     {
         $refreshToken = 'valid_refresh_token';
-        $user = $this->createUser();
-        $userId = $user->getId();
+        $expectedResult = [
+            'accessToken' => 'new_access_token',
+            'refreshToken' => 'new_refresh_token',
+            'user' => ['email' => 'test@example.com']
+        ];
 
-        $this->jwtEncoder->expects($this->once())
-            ->method('decode')
+        $this->tokenService->expects($this->once())
+            ->method('refresh')
             ->with($refreshToken)
-            ->willReturn(['sub' => $userId, 'email' => 'test@example.com']);
-
-        $this->redisService->expects($this->once())
-            ->method('getToken')
-            ->with("refresh_token:{$userId}")
-            ->willReturn($refreshToken);
-
-        $this->usersService->expects($this->once())
-            ->method('getUser')
-            ->with($userId)
-            ->willReturn($user);
-
-        $this->jwtManager->expects($this->once())
-            ->method('create')
-            ->willReturn('new_access_token');
-
-        $this->jwtEncoder->expects($this->once())
-            ->method('encode')
-            ->willReturn('new_refresh_token');
-
-        $this->redisService->expects($this->exactly(2))
-            ->method('setToken');
+            ->willReturn($expectedResult);
 
         $result = $this->authService->refresh($refreshToken);
 
@@ -225,13 +178,13 @@ class AuthServiceTest extends TestCase
 
     public function testRefreshInvalidToken(): void
     {
-        $this->jwtEncoder->expects($this->once())
-            ->method('decode')
+        $this->tokenService->expects($this->once())
+            ->method('refresh')
             ->with('invalid_token')
-            ->willThrowException(new JWTDecodeFailureException('reason', 'msg'));
+            ->willThrowException(new UnauthorizedHttpException('jwt', 'Refresh-токен недействителен или истёк'));
 
         $this->expectException(UnauthorizedHttpException::class);
-        $this->expectExceptionMessage('Ошибка валидации refresh-токена');
+        $this->expectExceptionMessage('Refresh-токен недействителен или истёк');
 
         $this->authService->refresh('invalid_token');
     }
@@ -251,12 +204,11 @@ class AuthServiceTest extends TestCase
             ->method('changePassword')
             ->with($user, $newPassword);
 
-        $this->redisService->expects($this->exactly(2))
-            ->method('deleteToken');
+        $this->tokenService->expects($this->once())
+            ->method('logout')
+            ->with($user);
 
         $this->authService->changePassword($user, $currentPassword, $newPassword);
-
-        $this->assertTrue(true); // Просто проверка, что метод завершился без исключений
     }
 
     public function testChangePasswordInvalidCurrentPassword(): void
@@ -274,14 +226,34 @@ class AuthServiceTest extends TestCase
         $this->authService->changePassword($user, 'wrong_password', 'NewPass123!');
     }
 
+    public function testGoogleLoginSuccess(): void
+    {
+        $credential = 'google_credential';
+        $user = $this->createUser();
+
+        $this->oauthService->expects($this->once())
+            ->method('googleLogin')
+            ->with($credential)
+            ->willReturn($user);
+
+        $this->tokenService->expects($this->once())
+            ->method('generateTokens')
+            ->with($user)
+            ->willReturn(['accessToken' => 'access_token', 'refreshToken' => 'refresh_token']);
+
+        $result = $this->authService->googleLogin($credential);
+
+        $this->assertEquals('access_token', $result['accessToken']);
+    }
+
     public function testGoogleLoginInvalidToken(): void
     {
         $credential = 'invalid_credential';
 
-        $this->googleClient->expects($this->once())
-            ->method('verifyIdToken')
-            ->with($credential, 'google-client-id') // Добавлен audience
-            ->willReturn(false);
+        $this->oauthService->expects($this->once())
+            ->method('googleLogin')
+            ->with($credential)
+            ->willThrowException(new UnauthorizedHttpException('google', 'Неверный Google токен'));
 
         $this->expectException(UnauthorizedHttpException::class);
         $this->expectExceptionMessage('Неверный Google токен');
@@ -289,87 +261,20 @@ class AuthServiceTest extends TestCase
         $this->authService->googleLogin($credential);
     }
 
-    public function testGoogleLoginSuccess(): void
-    {
-        $credential = 'google_credential';
-        $user = $this->createUser();
-
-        $this->googleClient->expects($this->once())
-            ->method('verifyIdToken')
-            ->with($credential, 'google-client-id') // Исправлено на два аргумента
-            ->willReturn([
-                'email' => 'test@example.com',
-                'name' => 'Test User',
-                'sub' => 'google_id',
-                'picture' => 'avatar_url'
-            ]);
-
-        $this->usersService->expects($this->once())
-            ->method('getUserByEmail')
-            ->with('test@example.com')
-            ->willReturn($user);
-
-        $this->usersService->expects($this->once())
-            ->method('saveUser')
-            ->with($this->callback(function ($savedUser) {
-                return $savedUser->getProvider() === 'google' && $savedUser->getProviderId() === 'google_id';
-            }));
-
-        $this->jwtManager->expects($this->once())
-            ->method('create')
-            ->willReturn('access_token');
-
-        $this->jwtEncoder->expects($this->once())
-            ->method('encode')
-            ->willReturn('refresh_token');
-
-        $result = $this->authService->googleLogin($credential);
-
-        $this->assertEquals('access_token', $result['accessToken']);
-    }
-
     public function testGithubLoginSuccess(): void
     {
         $code = 'github_code';
         $user = $this->createUser();
 
-        $tokenResponse = $this->createMock(ResponseInterface::class);
-        $tokenResponse->expects($this->once())
-            ->method('toArray')
-            ->willReturn(['access_token' => 'github_token']);
-
-        $userResponse = $this->createMock(ResponseInterface::class);
-        $userResponse->expects($this->once())
-            ->method('toArray')
-            ->willReturn([
-                'id' => 'github_id',
-                'login' => 'testuser',
-                'name' => 'Test User',
-                'avatar_url' => 'avatar_url'
-            ]);
-
-        $this->httpClient->expects($this->exactly(2))
-            ->method('request')
-            ->willReturnOnConsecutiveCalls($tokenResponse, $userResponse);
-
-        $this->usersService->expects($this->once())
-            ->method('getUserByEmail')
-            ->with('testuser@github.com')
+        $this->oauthService->expects($this->once())
+            ->method('githubLogin')
+            ->with($code)
             ->willReturn($user);
 
-        $this->usersService->expects($this->once())
-            ->method('saveUser')
-            ->with($this->callback(function ($savedUser) {
-                return $savedUser->getProvider() === 'github' && $savedUser->getProviderId() === 'github_id';
-            }));
-
-        $this->jwtManager->expects($this->once())
-            ->method('create')
-            ->willReturn('access_token');
-
-        $this->jwtEncoder->expects($this->once())
-            ->method('encode')
-            ->willReturn('refresh_token');
+        $this->tokenService->expects($this->once())
+            ->method('generateTokens')
+            ->with($user)
+            ->willReturn(['accessToken' => 'access_token', 'refreshToken' => 'refresh_token']);
 
         $result = $this->authService->githubLogin($code);
 
@@ -379,36 +284,22 @@ class AuthServiceTest extends TestCase
     public function testLogoutSuccess(): void
     {
         $user = $this->createUser();
-        $userId = $user->getId();
 
-        $this->redisService->expects($this->exactly(2))
-            ->method('deleteToken')
-            ->with($this->callback(function ($key) use ($userId) {
-                return in_array($key, [
-                    "access_token:{$userId}",
-                    "refresh_token:{$userId}"
-                ]);
-            }));
+        $this->tokenService->expects($this->once())
+            ->method('logout')
+            ->with($user);
 
         $this->authService->logout($user);
-
-        $this->assertTrue(true);
     }
 
     public function testGetUserByJwtTokenSuccess(): void
     {
         $jwtToken = 'valid_jwt';
         $user = $this->createUser();
-        $userId = $user->getId();
 
-        $this->jwtEncoder->expects($this->once())
-            ->method('decode')
+        $this->tokenService->expects($this->once())
+            ->method('getUserByJwtToken')
             ->with($jwtToken)
-            ->willReturn(['sub' => $userId]);
-
-        $this->usersService->expects($this->once())
-            ->method('getUser')
-            ->with($userId)
             ->willReturn($user);
 
         $result = $this->authService->getUserByJwtToken($jwtToken);
@@ -418,14 +309,16 @@ class AuthServiceTest extends TestCase
 
     public function testGetUserByJwtTokenInvalidToken(): void
     {
-        $this->jwtEncoder->expects($this->once())
-            ->method('decode')
-            ->with('invalid_jwt')
-            ->willThrowException(new \Exception('Invalid token'));
+        $jwtToken = 'invalid_jwt';
+
+        $this->tokenService->expects($this->once())
+            ->method('getUserByJwtToken')
+            ->with($jwtToken)
+            ->willThrowException(new UnauthorizedHttpException('jwt', 'Токен недействителен или был отозван'));
 
         $this->expectException(UnauthorizedHttpException::class);
-        $this->expectExceptionMessage('Ошибка обработки токена');
+        $this->expectExceptionMessage('Токен недействителен или был отозван');
 
-        $this->authService->getUserByJwtToken('invalid_jwt');
+        $this->authService->getUserByJwtToken($jwtToken);
     }
 }

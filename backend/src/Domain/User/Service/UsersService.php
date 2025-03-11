@@ -2,57 +2,41 @@
 namespace App\Domain\User\Service;
 
 use App\Domain\User\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Domain\User\Repository\UserRepository;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class UsersService
 {
-    private EntityManagerInterface $em;
+    private UserRepository $userRepository;
     private UserPasswordHasherInterface $passwordHasher;
 
     public function __construct(
-        EntityManagerInterface $em,
+        UserRepository $userRepository,
         UserPasswordHasherInterface $passwordHasher
     ) {
-        $this->em = $em;
+        $this->userRepository = $userRepository;
         $this->passwordHasher = $passwordHasher;
     }
 
     public function getUser(string $id): ?User
     {
-        return $this->em->getRepository(User::class)
-            ->createQueryBuilder('u')
-            ->where('u.id = :id')
-            ->andWhere('u.delStatus = :active')
-            ->setParameter('id', $id)
-            ->setParameter('active', \App\Shared\Enum\DelStatusEnum::ACTIVE->value)
-            ->getQuery()
-            ->getOneOrNullResult();
+        return $this->userRepository->getActiveById($id);
     }
 
     public function getUserByEmail(string $email): ?User
     {
-        return $this->em->getRepository(User::class)
-            ->createQueryBuilder('u')
-            ->where('u.email = :email')
-            ->andWhere('u.delStatus = :active')
-            ->setParameter('email', $email)
-            ->setParameter('active', \App\Shared\Enum\DelStatusEnum::ACTIVE->value)
-            ->getQuery()
-            ->getOneOrNullResult();
+        return $this->userRepository->getActiveByEmail($email);
     }
 
     public function createUser(string $email, string $password, ?string $fullName = null, ?string $avatar = null): User
     {
         $user = new User();
-        $user->setEmail($email);
-        $user->setPassword($this->passwordHasher->hashPassword($user, $password));
-        $user->setFullName($fullName);
-        $user->setAvatar($avatar);
+        $user->setEmail($email)
+            ->setPassword($this->passwordHasher->hashPassword($user, $password))
+            ->setFullName($fullName)
+            ->setAvatar($avatar);
 
-        $this->em->persist($user);
-        $this->em->flush();
-
+        $this->userRepository->save($user);
         return $user;
     }
 
@@ -65,31 +49,24 @@ class UsersService
             $user->setAvatar($avatar);
         }
 
-        $this->em->persist($user);
-        $this->em->flush();
-
+        $this->userRepository->save($user);
         return $user;
     }
 
     public function changePassword(User $user, string $newPassword): User
     {
         $user->setPassword($this->passwordHasher->hashPassword($user, $newPassword));
-        $this->em->persist($user);
-        $this->em->flush();
-
+        $this->userRepository->save($user);
         return $user;
     }
 
     public function saveUser(User $user): void
     {
-        $this->em->persist($user);
-        $this->em->flush();
+        $this->userRepository->save($user);
     }
 
     public function deleteUser(User $user): void
     {
-        $user->softDelete();
-        $this->em->persist($user);
-        $this->em->flush();
+        $this->userRepository->delete($user);
     }
 }
