@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Shared\Controller;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -30,8 +31,12 @@ abstract class BaseController
         return $dto;
     }
 
-    protected function jsonResponse($data, int $status = Response::HTTP_OK): JsonResponse
+    protected function jsonResponse($data, int $status = Response::HTTP_OK, array $groups = []): JsonResponse
     {
-        return new JsonResponse($data, $status);
+        if (!empty($groups)) {
+            $json = $this->serializer->serialize($data, 'json', ['groups' => $groups]);
+            return new JsonResponse($json, $status, [], true); 
+        }
+        return new JsonResponse($data, $status); 
     }
 }

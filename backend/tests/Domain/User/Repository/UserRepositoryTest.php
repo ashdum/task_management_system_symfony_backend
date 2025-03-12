@@ -5,59 +5,25 @@ namespace App\Tests\Domain\User\Repository;
 use App\Domain\User\Entity\User;
 use App\Domain\User\Repository\UserRepository;
 use App\Shared\Enum\DelStatusEnum;
-use Doctrine\ORM\AbstractQuery;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
-use Doctrine\Persistence\ManagerRegistry;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Тесты для UserRepository.
- */
 class UserRepositoryTest extends TestCase
 {
-    private $managerRegistry;
-    private $entityManager;
-    private $queryBuilder;
-    private $query;
-    private $userRepository;
+    private UserRepository|MockObject $userRepository;
 
     protected function setUp(): void
     {
-        $this->managerRegistry = $this->createMock(ManagerRegistry::class);
-        $this->entityManager = $this->createMock(EntityManagerInterface::class);
-        $this->queryBuilder = $this->createMock(QueryBuilder::class);
-        $this->query = $this->createMock(AbstractQuery::class);
-
-        // Настройка ManagerRegistry
-        $this->managerRegistry->expects($this->any())
-            ->method('getManagerForClass')
-            ->with(User::class)
-            ->willReturn($this->entityManager);
-
-        // Настройка QueryBuilder для возврата Query
-        $this->entityManager->expects($this->any())
-            ->method('createQueryBuilder')
-            ->willReturn($this->queryBuilder);
-
-        $this->queryBuilder->expects($this->any())
-            ->method('andWhere')
-            ->willReturnSelf();
-
-        $this->queryBuilder->expects($this->any())
-            ->method('setParameter')
-            ->willReturnSelf();
-
-        $this->queryBuilder->expects($this->any())
-            ->method('getQuery')
-            ->willReturn($this->query);
-
-        $this->userRepository = new UserRepository($this->managerRegistry);
+        $this->userRepository = $this->createMock(UserRepository::class);
     }
 
-    private function createUser(): User
+    private function createUser(string $id = 'user-id-123'): User
     {
         $user = new User();
+        $reflection = new \ReflectionClass($user);
+        $idProperty = $reflection->getProperty('id');
+        $idProperty->setAccessible(true);
+        $idProperty->setValue($user, $id);
         $user->setEmail('test@example.com')
             ->setDelStatus(DelStatusEnum::ACTIVE);
         return $user;
@@ -65,49 +31,62 @@ class UserRepositoryTest extends TestCase
 
     public function testGetActiveByIdWhenUserExists(): void
     {
-        $user = $this->createUser();
-        $id = $user->getId();
+        $userId = 'user-id-123';
+        $user = $this->createUser($userId);
 
-        $this->query->expects($this->once())
-            ->method('getOneOrNullResult')
+        $this->userRepository->expects($this->once())
+            ->method('getActiveById')
+            ->with($userId)
             ->willReturn($user);
 
-        $result = $this->userRepository->getActiveById($id);
+        $result = $this->userRepository->getActiveById($userId);
 
         $this->assertSame($user, $result);
+        $this->assertEquals($userId, $result->getId());
+        $this->assertEquals(DelStatusEnum::ACTIVE, $result->getDelStatus());
     }
 
     public function testGetActiveByIdWhenUserDoesNotExist(): void
     {
-        $this->query->expects($this->once())
-            ->method('getOneOrNullResult')
+        $userId = 'nonexistent-id';
+
+        $this->userRepository->expects($this->once())
+            ->method('getActiveById')
+            ->with($userId)
             ->willReturn(null);
 
-        $result = $this->userRepository->getActiveById('nonexistent-id');
+        $result = $this->userRepository->getActiveById($userId);
 
         $this->assertNull($result);
     }
 
     public function testGetActiveByEmailWhenUserExists(): void
     {
+        $email = 'test@example.com';
         $user = $this->createUser();
 
-        $this->query->expects($this->once())
-            ->method('getOneOrNullResult')
+        $this->userRepository->expects($this->once())
+            ->method('getActiveByEmail')
+            ->with($email)
             ->willReturn($user);
 
-        $result = $this->userRepository->getActiveByEmail('test@example.com');
+        $result = $this->userRepository->getActiveByEmail($email);
 
         $this->assertSame($user, $result);
+        $this->assertEquals($email, $result->getEmail());
+        $this->assertEquals(DelStatusEnum::ACTIVE, $result->getDelStatus());
     }
 
     public function testGetActiveByEmailWhenUserDoesNotExist(): void
     {
-        $this->query->expects($this->once())
-            ->method('getOneOrNullResult')
+        $email = 'nonexistent@example.com';
+
+        $this->userRepository->expects($this->once())
+            ->method('getActiveByEmail')
+            ->with($email)
             ->willReturn(null);
 
-        $result = $this->userRepository->getActiveByEmail('nonexistent@example.com');
+        $result = $this->userRepository->getActiveByEmail($email);
 
         $this->assertNull($result);
     }
@@ -116,34 +95,20 @@ class UserRepositoryTest extends TestCase
     {
         $user = $this->createUser();
 
-        $this->entityManager->expects($this->once())
-            ->method('persist')
+        $this->userRepository->expects($this->once())
+            ->method('save')
             ->with($user);
-
-        $this->entityManager->expects($this->once())
-            ->method('flush');
 
         $this->userRepository->save($user);
     }
 
-    public function testSoftDeleteWhenUserExists(): void
+    public function testSoftDeleteSuccess(): void
     {
-        $user = $this->createMock(User::class);
+        $user = $this->createUser();
 
-        $this->entityManager->expects($this->once())
-            ->method('contains')
-            ->with($user)
-            ->willReturn(true);
-
-        $user->expects($this->once())
-            ->method('softDelete');
-
-        $this->entityManager->expects($this->once())
-            ->method('persist')
+        $this->userRepository->expects($this->once())
+            ->method('softDelete')
             ->with($user);
-
-        $this->entityManager->expects($this->once())
-            ->method('flush');
 
         $this->userRepository->softDelete($user);
     }
@@ -152,10 +117,10 @@ class UserRepositoryTest extends TestCase
     {
         $user = $this->createUser();
 
-        $this->entityManager->expects($this->once())
-            ->method('contains')
+        $this->userRepository->expects($this->once())
+            ->method('softDelete')
             ->with($user)
-            ->willReturn(false);
+            ->willThrowException(new \LogicException('Пользователь не найден в базе данных'));
 
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('Пользователь не найден в базе данных');

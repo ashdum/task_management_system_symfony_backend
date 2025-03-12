@@ -75,3 +75,16 @@ services:
     App\Shared\EventListener\ExceptionListener:
         tags:
             - { name: kernel.event_listener, event: kernel.exception }
+
+    App\Domain\Dashboard\Service\DashboardService:
+        arguments:
+            $dashboardRepository: '@App\Domain\Dashboard\Repository\DashboardRepository'
+            $dashboardUserRepository: '@App\Domain\Dashboard\Repository\DashboardUserRepository'
+            $userRepository: '@App\Domain\User\Repository\UserRepository'
+
+    App\Domain\Dashboard\Controller\DashboardController:
+        arguments:
+            $dashboardService: '@App\Domain\Dashboard\Service\DashboardService'
+            $security: '@security.helper'
+            $serializer: '@serializer'
+            $validator: '@validator'
