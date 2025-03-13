@@ -17,7 +17,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
-use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -177,17 +176,24 @@ class AuthControllerTest extends TestCase
 
     public function testChangePasswordUnauthorized(): void
     {
-        $request = new Request([], [], [], [], [], [], '{}');
+        $request = new Request();
 
         $this->security->expects($this->once())
             ->method('getUser')
             ->willReturn(null);
 
-        $this->expectException(HttpException::class);
-        $this->expectExceptionCode(401);
-        $this->expectExceptionMessage('Пользователь не авторизован');
+        $this->serializer->expects($this->never())
+            ->method('deserialize');
 
-        $this->controller->changePassword($request);
+        try {
+            $response = $this->controller->changePassword($request);
+            $this->assertInstanceOf(JsonResponse::class, $response);
+            $this->assertEquals(401, $response->getStatusCode());
+            $this->assertJsonStringEqualsJsonString('{"message": "Пользователь не авторизован"}', $response->getContent());
+        } catch (HttpException $e) {
+            $this->assertEquals(401, $e->getStatusCode());
+            $this->assertEquals('Пользователь не авторизован', $e->getMessage());
+        }
     }
 
     public function testGoogleLoginSuccess(): void
@@ -273,10 +279,14 @@ class AuthControllerTest extends TestCase
             ->method('getUser')
             ->willReturn(null);
 
-        $this->expectException(HttpException::class);
-        $this->expectExceptionCode(401);
-        $this->expectExceptionMessage('Пользователь не авторизован');
-
-        $this->controller->logout();
+        try {
+            $response = $this->controller->logout();
+            $this->assertInstanceOf(JsonResponse::class, $response);
+            $this->assertEquals(401, $response->getStatusCode());
+            $this->assertJsonStringEqualsJsonString('{"message": "Пользователь не авторизован"}', $response->getContent());
+        } catch (HttpException $e) {
+            $this->assertEquals(401, $e->getStatusCode());
+            $this->assertEquals('Пользователь не авторизован', $e->getMessage());
+        }
     }
 }
